@@ -19,6 +19,7 @@ public class IDAllocDaoImpl implements IDAllocDao {
     SqlSessionFactory sqlSessionFactory;
 
     public IDAllocDaoImpl(DataSource dataSource) {
+        // 手动初始化sqlSessionFactory
         TransactionFactory transactionFactory = new JdbcTransactionFactory();
         Environment environment = new Environment("development", transactionFactory, dataSource);
         Configuration configuration = new Configuration(environment);
@@ -62,8 +63,13 @@ public class IDAllocDaoImpl implements IDAllocDao {
         }
     }
 
+    /**
+     * 从数据库查询出所有的biz_tag
+     * @return
+     */
     @Override
     public List<String> getAllTags() {
+        // 设置false，表示手动事务
         SqlSession sqlSession = sqlSessionFactory.openSession(false);
         try {
             return sqlSession.selectList("com.sankuai.inf.leaf.segment.dao.IDAllocMapper.getAllTags");

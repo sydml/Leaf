@@ -7,7 +7,9 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * 双buffer
+ * 双buffer——双号段
+ * 双Buffer的方式，保证无论何时DB出现问题，都能有一个Buffer的号段可以正常对外提供服务
+ * 只要DB在一个Buffer的下发的周期内恢复，就不会影响整个Leaf的可用性
  */
 public class SegmentBuffer {
     private String key;

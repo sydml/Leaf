@@ -62,7 +62,7 @@
                 <artifactId>druid</artifactId>
                 <version>${druid.version}</version>
             </dependency>
-            <!--zk-->
+            <!--zookeeper client-->
             <dependency>
                 <groupId>org.apache.curator</groupId>
                 <artifactId>curator-recipes</artifactId>
@@ -85,6 +85,7 @@
                 <version>${mybatis.version}</version>
             </dependency>
 
+            <!-- Perf4j 是一款专门用于 Java 服务器端代码计时、记录日志和监控结果的开源工具包 -->
             <dependency>
                 <groupId>org.perf4j</groupId>
                 <artifactId>perf4j</artifactId>

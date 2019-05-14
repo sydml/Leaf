@@ -15,15 +15,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 号段模式监控Controller
+ */
 @Controller
 public class LeafMonitorController {
     private Logger logger = LoggerFactory.getLogger(LeafMonitorController.class);
+
     @Autowired
     SegmentService segmentService;
 
     @RequestMapping(value = "cache")
     public String getCache(Model model) {
         Map<String, SegmentBufferView> data = new HashMap<>();
+
+
         SegmentIDGenImpl segmentIDGen = segmentService.getIdGen();
         if (segmentIDGen == null) {
             throw new IllegalArgumentException("You should config leaf.segment.enable=true first");
