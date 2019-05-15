@@ -174,7 +174,7 @@ public class SegmentIDGenImpl implements IDGen {
             if (!buffer.isInitOk()) {
                 synchronized (buffer) {
                     if (!buffer.isInitOk()) {
-                        // 初始化SegmentBuffer
+                        // DB数据初始化SegmentBuffer
                         try {
                             // 根据数据库表中key对应的记录 来初始化SegmentBuffer当前正在使用的Segment
                             updateSegmentFromDb(key, buffer.getCurrent());
@@ -277,7 +277,7 @@ public class SegmentIDGenImpl implements IDGen {
             leafAlloc = dao.updateMaxIdByCustomStepAndGetLeafAlloc(temp);
             // 记录更新时间
             buffer.setUpdateTimestamp(System.currentTimeMillis());
-            // 记录当前buffer的step值
+            // 记录当前buffer的动态调整的step值
             buffer.setStep(nextStep);
             // leafAlloc的step为DB中的step，所以DB中的step值代表着下限
             buffer.setMinStep(leafAlloc.getStep());

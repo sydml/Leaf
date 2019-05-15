@@ -12,17 +12,17 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * 只要DB在一个Buffer的下发的周期内恢复，就不会影响整个Leaf的可用性
  */
 public class SegmentBuffer {
-    private String key;
+    private String key; // 数据库的业务tag
     private Segment[] segments; //双buffer
     private volatile int currentPos; //当前的使用的segment的index
     private volatile boolean nextReady; //下一个segment是否处于可切换状态
     private volatile boolean initOk; //是否DB数据初始化完成
     private final AtomicBoolean threadRunning; //线程是否在运行中
-    private final ReadWriteLock lock;
+    private final ReadWriteLock lock; // 读写锁
 
-    private volatile int step;
-    private volatile int minStep;
-    private volatile long updateTimestamp;
+    private volatile int step;  // 动态调整的step
+    private volatile int minStep;  // 最小step
+    private volatile long updateTimestamp;  // 更新时间戳
 
     public SegmentBuffer() {
         segments = new Segment[]{new Segment(this), new Segment(this)};

@@ -56,6 +56,10 @@ public class Segment {
         return buffer;
     }
 
+    /**
+     * 获取号段的剩余量
+     * @return
+     */
     public long getIdle() {
         return this.getMax() - getValue().get();
     }
