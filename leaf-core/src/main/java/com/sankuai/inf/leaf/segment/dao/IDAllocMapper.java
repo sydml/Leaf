@@ -41,7 +41,7 @@ public interface IDAllocMapper {
     void updateMaxId(@Param("tag") String tag);
 
     /**
-     * 按照动态step更新目前所被分配的ID号段的最大值
+     * 按照动态调整的step更新目前所被分配的ID号段的最大值
      * @param leafAlloc
      */
     @Update("UPDATE leaf_alloc SET max_id = max_id + #{step} WHERE biz_tag = #{key}")

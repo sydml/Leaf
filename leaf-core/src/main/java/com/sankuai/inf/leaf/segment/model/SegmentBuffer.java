@@ -16,7 +16,7 @@ public class SegmentBuffer {
     private Segment[] segments; //双buffer
     private volatile int currentPos; //当前的使用的segment的index
     private volatile boolean nextReady; //下一个segment是否处于可切换状态
-    private volatile boolean initOk; //是否初始化完成
+    private volatile boolean initOk; //是否DB数据初始化完成
     private final AtomicBoolean threadRunning; //线程是否在运行中
     private final ReadWriteLock lock;
 

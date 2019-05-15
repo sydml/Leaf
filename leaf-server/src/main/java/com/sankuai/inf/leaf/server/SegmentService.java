@@ -50,7 +50,7 @@ public class SegmentService {
             // 4. 创建ID生成器实例SegmentIDGenImpl
             idGen = new SegmentIDGenImpl();
             ((SegmentIDGenImpl) idGen).setDao(dao);
-            // 初始化SegmentIDGenImpl
+            // 初始化SegmentIDGenImpl(加载db的tags至内存cache中，并开启定时同步更新任务)
             if (idGen.init()) {
                 logger.info("Segment Service Init Successfully");
             } else {
@@ -72,6 +72,10 @@ public class SegmentService {
         return idGen.get(key);
     }
 
+    /**
+     * 获取号段模式id生成器SegmentIDGenImpl
+     * @return
+     */
     public SegmentIDGenImpl getIdGen() {
         if (idGen instanceof SegmentIDGenImpl) {
             return (SegmentIDGenImpl) idGen;

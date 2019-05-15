@@ -14,6 +14,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 号段模式ID生成器
+ */
 public class SegmentIDGenImpl implements IDGen {
     private static final Logger logger = LoggerFactory.getLogger(SegmentIDGenImpl.class);
 
@@ -76,6 +79,7 @@ public class SegmentIDGenImpl implements IDGen {
         // 确保加载到kv后才初始化成功
         updateCacheFromDb();
         initOK = true;
+        // 定时1min同步一次db和cache
         updateCacheFromDbAtEveryMinute();
         return initOK;
     }
@@ -123,11 +127,12 @@ public class SegmentIDGenImpl implements IDGen {
             // 1. cache新增上数据库表后添加的tags
             // 2. cache删除掉数据库表后删除的tags
 
-            // 1. db中新加的tags灌进cache
+            // 1. db中新加的tags灌进cache，并实例化初始对应的SegmentBuffer
             insertTags.removeAll(cacheTags);
             for (String tag : insertTags) {
                 SegmentBuffer buffer = new SegmentBuffer();
                 buffer.setKey(tag);
+                // 零值初始化当前正在使用的Segment号段
                 Segment segment = buffer.getCurrent();
                 segment.setValue(new AtomicLong(0));
                 segment.setMax(0);
@@ -149,26 +154,29 @@ public class SegmentIDGenImpl implements IDGen {
     }
 
     /**
-     * 获取对应key的下一个id
+     * 获取对应key的下一个id值
      * @param key
      * @return
      */
     @Override
     public Result get(final String key) {
         // 必须在 SegmentIDGenImpl 初始化后执行init()方法
+        // 也就是必须将数据库中的tags加载到内存cache中，并开启定时同步任务
         if (!initOK) {
             return new Result(EXCEPTION_ID_IDCACHE_INIT_FALSE, Status.EXCEPTION);
         }
         if (cache.containsKey(key)) {
-            // 获取cache中对应的SegmentBuffer
+            // 获取cache中对应的SegmentBuffer，SegmentBuffer中包含双buffer，两个号段
             SegmentBuffer buffer = cache.get(key);
 
-            // 双重判断，避免重复执行SegmentBuffer的初始化操作.
+            // 双重判断，避免多线程重复执行SegmentBuffer的初始化值操作
+            // 在get id前检查是否完成DB数据初始化cache中key对应的的SegmentBuffer(之前只是零值初始化)，需要保证线程安全
             if (!buffer.isInitOk()) {
                 synchronized (buffer) {
                     if (!buffer.isInitOk()) {
                         // 初始化SegmentBuffer
                         try {
+                            // 根据数据库表中key对应的记录 来初始化SegmentBuffer当前正在使用的Segment
                             updateSegmentFromDb(key, buffer.getCurrent());
                             logger.info("Init buffer. Update leafkey {} {} from db", key, buffer.getCurrent());
                             buffer.setInitOk(true);
@@ -178,34 +186,44 @@ public class SegmentIDGenImpl implements IDGen {
                     }
                 }
             }
+
+            // SegmentBuffer准备好之后正常就直接从cache中生成id即可
             return getIdFromSegmentBuffer(cache.get(key));
         }
 
-        // cache中不存在对应的key
+        // cache中不存在对应的key，则返回异常错误
         return new Result(EXCEPTION_ID_KEY_NOT_EXISTS, Status.EXCEPTION);
     }
 
     /**
-     * 从数据库中更新SegmentBuffer中的Segment
+     * 从数据库表中读取数据更新SegmentBuffer中的Segment
      * @param key
      * @param segment
      */
     public void updateSegmentFromDb(String key, Segment segment) {
         StopWatch sw = new Slf4JStopWatch();
 
+        /**
+         * 1. 先设置SegmentBuffer
+         */
+
+        // 获取Segment号段所属的SegmentBuffer
         SegmentBuffer buffer = segment.getBuffer();
         LeafAlloc leafAlloc;
-        // 如果buffer没有初始化(第一次初始化)
+        // 如果buffer没有DB数据初始化(也就是第一次进行DB数据初始化)
         if (!buffer.isInitOk()) {
+            // 更新数据库中key对应记录的maxId(maxId表示当前分配到的最大id，maxId=maxId+step)，并查询更新后的记录返回
             leafAlloc = dao.updateMaxIdAndGetLeafAlloc(key);
+            // 数据库初始设置的step赋值给当前buffer的初始step，后面后动态调整
             buffer.setStep(leafAlloc.getStep());
-            // leafAlloc中的step为DB中的step，buffer未初始化，所以最小是leafAlloc中的step
+            // leafAlloc中的step为DB中设置的step，buffer这里是未进行DB数据初始化的，所以DB中step代表动态调整的最小下限
             buffer.setMinStep(leafAlloc.getStep());
         }
-        // 如果buffer的更新时间是0（初始是0，也就是第二次进来）
+        // 如果buffer的更新时间是0（初始是0，也就是第二次调用updateSegmentFromDb()）
         else if (buffer.getUpdateTimestamp() == 0) {
+            // 更新数据库中key对应记录的maxId(maxId表示当前分配到的最大id，maxId=maxId+step)，并查询更新后的记录返回
             leafAlloc = dao.updateMaxIdAndGetLeafAlloc(key);
-            // 第二次更新更新时间
+            // 记录buffer的更新时间
             buffer.setUpdateTimestamp(System.currentTimeMillis());
             // leafAlloc中的step为DB中的step
             buffer.setMinStep(leafAlloc.getStep());
@@ -220,7 +238,7 @@ public class SegmentIDGenImpl implements IDGen {
              *  动态调整step
              *  1) duration < 15 分钟 : step 变为原来的2倍， 最大为 MAX_STEP
              *  2) 15分钟 <= duration < 30分钟 : nothing
-             *  3) duration >= 30 分钟 : 缩小step, 最小为DB中配置的步数
+             *  3) duration >= 30 分钟 : 缩小step, 最小为DB中配置的step
              *
              *  这样做的原因是认为15min一个号段大致满足需求
              *  如果updateSegmentFromDb()速度频繁(15min多次)，也就是
@@ -245,20 +263,33 @@ public class SegmentIDGenImpl implements IDGen {
             else {
                 nextStep = nextStep / 2 >= buffer.getMinStep() ? nextStep / 2 : nextStep;
             }
-            logger.info("leafKey[{}], step[{}], duration[{}mins], nextStep[{}]", key, buffer.getStep(), String.format("%.2f",((double)duration / (1000 * 60))), nextStep);
+            logger.info("leafKey[{}], dbStep[{}], duration[{}mins], nextStep[{}]", key, buffer.getStep(), String.format("%.2f",((double)duration / (1000 * 60))), nextStep);
 
+            /**
+             * 根据动态调整的nextStep更新数据库相应的maxId
+             */
+
+            // 为了高效更新记录，创建一个LeafAlloc，仅设置必要的字段的信息
             LeafAlloc temp = new LeafAlloc();
             temp.setKey(key);
             temp.setStep(nextStep);
-            // 更新数据库maxId
+            // 根据动态调整的step更新数据库的maxId
             leafAlloc = dao.updateMaxIdByCustomStepAndGetLeafAlloc(temp);
+            // 记录更新时间
             buffer.setUpdateTimestamp(System.currentTimeMillis());
+            // 记录当前buffer的step值
             buffer.setStep(nextStep);
-            // leafAlloc的step为DB中的step
+            // leafAlloc的step为DB中的step，所以DB中的step值代表着下限
             buffer.setMinStep(leafAlloc.getStep());
         }
-        // must set value before set max
+
+        /**
+         * 2. 准备当前Segment号段
+         */
+
+        // 设置Segment号段id的起始值，value就是id（start=max_id-step）
         long value = leafAlloc.getMaxId() - buffer.getStep();
+        // must set value before set max（https://github.com/Meituan-Dianping/Leaf/issues/16）
         segment.getValue().set(value);
         segment.setMax(leafAlloc.getMaxId());
         segment.setStep(buffer.getStep());
@@ -266,12 +297,12 @@ public class SegmentIDGenImpl implements IDGen {
     }
 
     /**
-     * 从SegmentBuffer获取id
+     * 从SegmentBuffer生成id返回
      * @param buffer
      * @return
      */
     public Result getIdFromSegmentBuffer(final SegmentBuffer buffer) {
-        // 自旋获取
+        // 自旋获取id
         while (true) {
             try {
                 // 获取buffer的共享读锁，在平时不操作Segment的情况下益于并发
@@ -302,6 +333,7 @@ public class SegmentIDGenImpl implements IDGen {
                             } finally {
                                 // 如果准备成功，则通过独占写锁设置另一个Segment准备标记OK，threadRunning为false表示准备完毕
                                 if (updateOk) {
+                                    // 读写锁是不允许线程先获得读锁继续获得写锁，这里可以是因为这一段代码其实是线程池线程去完成的，不是获取到读锁的线程
                                     buffer.wLock().lock();
                                     buffer.setNextReady(true);
                                     buffer.getThreadRunning().set(false);
@@ -315,7 +347,7 @@ public class SegmentIDGenImpl implements IDGen {
                     });
                 }
 
-                // 原子value++，也就是下一个id，这一步是多线程操作的，每一个线程加1都是原子的，但不一定保证顺序性
+                // 原子value++(返回旧值)，也就是下一个id，这一步是多线程操作的，每一个线程加1都是原子的，但不一定保证顺序性
                 long value = segment.getValue().getAndIncrement();
                 // 如果获取到的id小于maxId
                 if (value < segment.getMax()) {
@@ -335,7 +367,7 @@ public class SegmentIDGenImpl implements IDGen {
                 buffer.wLock().lock();
                 // 获取当前使用的Segment号段
                 final Segment segment = buffer.getCurrent();
-                // 重复获取value, 多线程执行时,在进行waitAndSleep()后,current segment可能会被修改.在交换Segment前进再次判断, 防止出错
+                // 重复获取value, 多线程执行时，Segment可能已经被其他线程切换。再次判断, 防止重复切换Segment
                 long value = segment.getValue().getAndIncrement();
                 if (value < segment.getMax()) {
                     return new Result(value, Status.SUCCESS);
@@ -379,6 +411,10 @@ public class SegmentIDGenImpl implements IDGen {
         }
     }
 
+    /**
+     * 获取所有的LeafAlloc
+     * @return
+     */
     public List<LeafAlloc> getAllLeafAllocs() {
         return dao.getAllLeafAllocs();
     }
