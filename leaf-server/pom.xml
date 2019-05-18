@@ -6,6 +6,7 @@
         <groupId>com.sankuai.inf.leaf</groupId>
         <artifactId>leaf-parent</artifactId>
         <version>1.0.1</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <groupId>com.sankuai.inf.leaf</groupId>
     <artifactId>leaf-server</artifactId>

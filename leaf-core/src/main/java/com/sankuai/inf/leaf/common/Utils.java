@@ -7,6 +7,11 @@ import java.net.InetAddress;
 
 public class Utils {
     private static final Logger logger = LoggerFactory.getLogger(Utils.class);
+
+    /**
+     * 获取本机ip
+     * @return
+     */
     public static String getIp() {
         String ip;
         try {
