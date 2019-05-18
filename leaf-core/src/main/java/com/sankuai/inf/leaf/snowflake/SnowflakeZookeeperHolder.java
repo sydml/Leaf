@@ -95,6 +95,7 @@ public class SnowflakeZookeeperHolder {
 
             // 2. 检查/snowflake/${leaf.name}/forever根节点是否存在
             Stat stat = curator.checkExists().forPath(PATH_FOREVER);
+            // 注意！！！！！这一段逻辑Leaf集群中只会有一个节点执行一次，所以下面workerId不需要从zk_AddressNode中解析赋值！！！！！
             if (stat == null) {
                 // 不存在根节点说明机器是第一次启动，则创建/snowflake/${leaf.name}/forever/ip:port-000000000，并写入自身节点标识和时间数据
                 zk_AddressNode = createNode(curator);
