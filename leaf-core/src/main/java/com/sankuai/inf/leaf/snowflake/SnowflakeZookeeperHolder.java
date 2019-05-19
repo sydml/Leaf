@@ -65,11 +65,19 @@ public class SnowflakeZookeeperHolder {
      */
     private String port;
     /**
-     * zkAddress
+     * zk的ip地址
      */
     private String connectionString;
+    /**
+     * 上一次更新时间
+     */
     private long lastUpdateTime;
 
+    /**
+     * @param ip 本机器的ip地址
+     * @param port 连接zk的端口号
+     * @param connectionString zk的ip地址
+     */
     public SnowflakeZookeeperHolder(String ip, String port, String connectionString) {
         this.ip = ip;
         this.port = port;

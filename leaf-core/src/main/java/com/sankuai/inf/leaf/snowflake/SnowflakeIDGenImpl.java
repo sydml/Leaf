@@ -105,20 +105,20 @@ public class SnowflakeIDGenImpl implements IDGen {
     public synchronized Result get(String key) {
         /**
          * 生成id号需要的时间戳和序列号
-         * 1. 时间戳要求大于等于上一次用的时间戳
+         * 1. 时间戳要求大于等于上一次用的时间戳（主要解决机器工作时NTP时间同步问题）
          * 2. 序列号在时间戳相等的情况下要递增，大于的情况下回到起点
          */
 
         // 获取当前时间戳，timestamp用于记录生成id的时间戳
         long timestamp = timeGen();
 
-        // 如果比上一次记录的时间戳早
+        // 如果比上一次记录的时间戳早，也就是NTP造成时间回退了
         if (timestamp < lastTimestamp) {
             long offset = lastTimestamp - timestamp;
             // 如果相差小于5
             if (offset <= 5) {
                 try {
-                    // 等待 2*offset ms就可以唤醒重新尝试获取锁继续执行
+                    // 等待 2*offset ms就可以唤醒重新尝试获取锁继续执行。当然，在这段时间内lastTimestamp很可能又被更新了
                     wait(offset << 1);
                     // 重新获取当前时间戳，理论上这次应该比上一次记录的时间戳迟了
                     timestamp = timeGen();
@@ -143,7 +143,7 @@ public class SnowflakeIDGenImpl implements IDGen {
             sequence = (sequence + 1) & sequenceMask;
             // seq 为0的时候表示当前毫秒12位自增序列用完了，应该用下一毫秒时间来区别，否则就重复了
             if (sequence == 0) {
-                // 对seq做随机作为起始
+                // 对seq做随机作为起始，主要出于DB分表均匀的考虑
                 sequence = RANDOM.nextInt(100);
                 // 生成比lastTimestamp滞后的时间戳，这里不进行wait，因为很快就能获得滞后的毫秒数
                 timestamp = tilNextMillis(lastTimestamp);
