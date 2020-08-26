@@ -127,7 +127,7 @@ public class SegmentIDGenImpl implements IDGen {
             // 1. cache新增上数据库表后添加的tags
             // 2. cache删除掉数据库表后删除的tags
 
-            // 1. db中新加的tags灌进cache，并实例化初始对应的SegmentBuffer
+            // 1. db中不包含原cache缓存的tags要初始化后添加到原cache中，保持db新增的tags加入缓存
             insertTags.removeAll(cacheTags);
             for (String tag : insertTags) {
                 SegmentBuffer buffer = new SegmentBuffer();
@@ -140,7 +140,7 @@ public class SegmentIDGenImpl implements IDGen {
                 cache.put(tag, buffer);
                 logger.info("Add tag {} from db to IdCache, SegmentBuffer {}", tag, buffer);
             }
-            // 2. cache中已失效的tags从cache删除
+            // 2. removeTags中db没有的tags要从cache中删除，保持一致
             removeTags.removeAll(dbTags);
             for (String tag : removeTags) {
                 cache.remove(tag);
