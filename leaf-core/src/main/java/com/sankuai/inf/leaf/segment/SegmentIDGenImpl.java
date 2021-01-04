@@ -171,6 +171,7 @@ public class SegmentIDGenImpl implements IDGen {
 
             // 双重判断，避免多线程重复执行SegmentBuffer的初始化值操作
             // 在get id前检查是否完成DB数据初始化cache中key对应的的SegmentBuffer(之前只是零值初始化)，需要保证线程安全
+            //todo ? 多实例时还是会拉取同一个号段范围的id吧？数据库行锁控制每个实例更新号段范围时不会覆盖另一个实例，每个实例更新时能安全获取自己申请的号段范围，所以使用java锁控制本机线程并发读写问题即可；解决分布式多实例也没用分布式锁啊，只是用了mysql的行锁
             if (!buffer.isInitOk()) {
                 synchronized (buffer) {
                     if (!buffer.isInitOk()) {
